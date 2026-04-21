@@ -1,0 +1,5 @@
+# Librerías necesarias para la Function App de Security Hub
+
+azure-functions
+boto3
+azure-storage-blob
