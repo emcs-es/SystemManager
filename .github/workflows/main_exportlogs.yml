@@ -29,7 +29,7 @@ jobs:
         with:
           app-name: 'exportlogs'
           package: '.'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_EXPORTLOGS }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_287FA5C8620345268E11E6687B2EEDFD }}
           sku: 'flexconsumption'
           remote-build: true
         
