@@ -84,18 +84,23 @@ def main(mytimer):
     # Extraer metadata
     # ==============================
     def extract_metadata(text):
+        account_id = ""
         account_name = ""
         execution_date = ""
+
+        m_id = re.search(r"ACCOUNT ID\s*:\s*(.+)", text)
+        if m_id:
+            account_id = m_id.group(1).strip()
 
         m_name = re.search(r"ACCOUNT NAME\s*:\s*(.+)", text)
         if m_name:
             account_name = m_name.group(1).strip()
-
+     
         m_date = re.search(r"EXECUTION DATE\s*:\s*(.+)", text)
         if m_date:
             execution_date = m_date.group(1).strip()
 
-        return account_name, execution_date
+        return account_name, account_id, execution_date
 
     # ==============================
     # Parsear fecha
@@ -121,7 +126,7 @@ def main(mytimer):
             stdout = read_s3(stdout_key) if object_exists(stdout_key) else ""
             stderr = read_s3(stderr_key) if object_exists(stderr_key) else ""
 
-            account_name, execution_date = extract_metadata(stdout)
+            account_name, account_id, execution_date = extract_metadata(stdout)
 
             if stderr.strip():
                 result = "ERROR"
@@ -134,6 +139,7 @@ def main(mytimer):
                 description = ""
 
             results.append([
+                account_id,
                 account_name,
                 instance_id,
                 execution_date,
@@ -155,7 +161,7 @@ def main(mytimer):
     # ==============================
     # Ordenar por fecha descendente
     # ==============================
-    all_results.sort(key=lambda x: parse_date(x[2]), reverse=True)
+    all_results.sort(key=lambda x: parse_date(x[3]), reverse=True)
 
     # ==============================
     # Crear CSV en memoria
@@ -164,6 +170,7 @@ def main(mytimer):
     writer = csv.writer(output, delimiter=';')
 
     writer.writerow([
+        "id_cuenta",
         "Cuenta",
         "Instancia",
         "Fecha de ejecucion",
