@@ -100,7 +100,7 @@ def main(mytimer):
         if m_date:
             execution_date = m_date.group(1).strip()
 
-        return account_name, account_id, execution_date
+        return account_name, str(account_id), execution_date
 
     # ==============================
     # Parsear fecha
@@ -139,7 +139,7 @@ def main(mytimer):
                 description = ""
 
             results.append([
-                account_id,
+                str(account_id),
                 account_name,
                 instance_id,
                 execution_date,
