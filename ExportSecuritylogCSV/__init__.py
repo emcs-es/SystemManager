@@ -12,7 +12,8 @@ def main(mytimer):
     # Configuración S3
     # ==============================
     BUCKET_NAME = "emcs-ssm"
-    PREFIX = "TareasProgramadas/Logs_Export/"
+    PREFIX_TAREAS = "TareasProgramadas/"
+    PREFIX_PATCH = "patch-manager/"
     REGION = "eu-west-1"
     MAX_THREADS = 10
 
@@ -30,32 +31,38 @@ def main(mytimer):
     # ==============================
     def list_command_ids():
         paginator = s3.get_paginator("list_objects_v2")
-        command_ids = []
+        entries = []
 
-        for page in paginator.paginate(
-            Bucket=BUCKET_NAME,
-            Prefix=PREFIX,
-            Delimiter="/"
-        ):
+        # TareasProgramadas/ → subcarpeta → command_id
+        for page in paginator.paginate(Bucket=BUCKET_NAME, Prefix=PREFIX_TAREAS, Delimiter="/"):
             for p in page.get("CommonPrefixes", []):
-                command_ids.append(p["Prefix"].replace(PREFIX, "").strip("/"))
-        return command_ids
+                subcarpeta_prefix = p["Prefix"]
+                for page2 in paginator.paginate(Bucket=BUCKET_NAME, Prefix=subcarpeta_prefix, Delimiter="/"):
+                    for p2 in page2.get("CommonPrefixes", []):
+                        command_id = p2["Prefix"].replace(subcarpeta_prefix, "").strip("/")
+                        entries.append((subcarpeta_prefix, command_id, "tareas"))
+
+        # patch-manager/ → cliente → command_id
+        for page in paginator.paginate(Bucket=BUCKET_NAME, Prefix=PREFIX_PATCH, Delimiter="/"):
+            for p in page.get("CommonPrefixes", []):
+                cliente_prefix = p["Prefix"]
+                for page2 in paginator.paginate(Bucket=BUCKET_NAME, Prefix=cliente_prefix, Delimiter="/"):
+                    for p2 in page2.get("CommonPrefixes", []):
+                        command_id = p2["Prefix"].replace(cliente_prefix, "").strip("/")
+                        entries.append((cliente_prefix, command_id, "patch"))
+
+        return entries
 
     # ==============================
     # Obtener InstanceIds
     # ==============================
-    def list_instance_ids(command_id):
-        path = f"{PREFIX}{command_id}/"
+    def list_instance_ids(command_path):
         paginator = s3.get_paginator("list_objects_v2")
         instance_ids = []
 
-        for page in paginator.paginate(
-            Bucket=BUCKET_NAME,
-            Prefix=path,
-            Delimiter="/"
-        ):
+        for page in paginator.paginate(Bucket=BUCKET_NAME, Prefix=command_path, Delimiter="/"):
             for p in page.get("CommonPrefixes", []):
-                iid = p["Prefix"].replace(path, "").strip("/")
+                iid = p["Prefix"].replace(command_path, "").strip("/")
                 if iid.startswith("i-"):
                     instance_ids.append(iid)
         return instance_ids
@@ -95,7 +102,7 @@ def main(mytimer):
         m_name = re.search(r"ACCOUNT NAME\s*:\s*(.+)", text)
         if m_name:
             account_name = m_name.group(1).strip()
-     
+
         m_date = re.search(r"EXECUTION DATE\s*:\s*(.+)", text)
         if m_date:
             execution_date = m_date.group(1).strip()
@@ -114,12 +121,18 @@ def main(mytimer):
     # ==============================
     # Procesar CommandId
     # ==============================
-    def process_command(command_id):
+    def process_command(entry):
+        subcarpeta_prefix, command_id, tipo = entry
         results = []
-        instance_ids = list_instance_ids(command_id)
+        command_path = f"{subcarpeta_prefix}{command_id}/"
+        instance_ids = list_instance_ids(command_path)
 
         for instance_id in instance_ids:
-            base = f"{PREFIX}{command_id}/{instance_id}/awsrunPowerShellScript/0.awsrunPowerShellScript/"
+            if tipo == "tareas":
+                base = f"{command_path}{instance_id}/awsrunPowerShellScript/0.awsrunPowerShellScript/"
+            else:  # patch
+                base = f"{command_path}{instance_id}/awsrunPowerShellScript/PatchWindows/"
+
             stdout_key = base + "stdout"
             stderr_key = base + "stderr"
 
@@ -151,10 +164,10 @@ def main(mytimer):
     # ==============================
     # Ejecución principal
     # ==============================
-    command_ids = list_command_ids()
+    entries = list_command_ids()
 
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
-        futures = [executor.submit(process_command, cid) for cid in command_ids]
+        futures = [executor.submit(process_command, entry) for entry in entries]
         for future in as_completed(futures):
             all_results.extend(future.result())
 
@@ -192,7 +205,7 @@ def main(mytimer):
     for blob in container_client.list_blobs():
         if blob.name.endswith(".csv"):
             container_client.delete_blob(blob.name)
-            
+
     now_str = datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
     blob_name = f"ssm_logs_{now_str}.csv"
 
