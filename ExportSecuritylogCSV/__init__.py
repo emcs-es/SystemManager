@@ -139,7 +139,7 @@ def main(mytimer):
             stdout = read_s3(stdout_key) if object_exists(stdout_key) else ""
             stderr = read_s3(stderr_key) if object_exists(stderr_key) else ""
 
-            account_name, account_id, execution_date = extract_metadata(stdout)
+            account_name, account_id, execution_date = extract_metadata(stdout if stdout.strip() else stderr)
 
             if stderr.strip():
                 result = "ERROR"
