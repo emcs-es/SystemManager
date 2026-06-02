@@ -94,6 +94,7 @@ def main(mytimer):
         account_id = ""
         account_name = ""
         execution_date = ""
+        instance_name = ""
 
         m_id = re.search(r"ACCOUNT ID\s*:\s*(.+)", text)
         if m_id:
@@ -107,7 +108,12 @@ def main(mytimer):
         if m_date:
             execution_date = m_date.group(1).strip()
 
-        return account_name, str(account_id), execution_date
+        m_instance = re.search(r"INSTANCE NAME\s*:\s*(.+)", text)
+        if m_instance:
+            instance_name = m_instance.group(1).strip()
+
+
+        return account_name, str(account_id), execution_date, instance_name
 
     # ==============================
     # Parsear fecha
@@ -124,6 +130,11 @@ def main(mytimer):
     def process_command(entry):
         subcarpeta_prefix, command_id, tipo = entry
         results = []
+      
+        tarea = ""
+        if tipo == "tareas":
+            tarea = subcarpeta_prefix.replace(PREFIX_TAREAS, "").strip("/")
+
         command_path = f"{subcarpeta_prefix}{command_id}/"
         instance_ids = list_instance_ids(command_path)
 
@@ -139,7 +150,7 @@ def main(mytimer):
             stdout = read_s3(stdout_key) if object_exists(stdout_key) else ""
             stderr = read_s3(stderr_key) if object_exists(stderr_key) else ""
 
-            account_name, account_id, execution_date = extract_metadata(stdout if stdout.strip() else stderr)
+            account_name, account_id, execution_date, instance_name = extract_metadata(stdout if stdout.strip() else stderr)
 
             if stderr.strip():
                 result = "ERROR"
@@ -155,8 +166,10 @@ def main(mytimer):
                 str(account_id),
                 account_name,
                 instance_id,
+                instance_name,
                 execution_date,
                 result,
+                tarea,
                 description
             ])
         return results
@@ -185,9 +198,11 @@ def main(mytimer):
     writer.writerow([
         "id_cuenta",
         "Cuenta",
+        "id_instancia",
         "Instancia",
         "Fecha de ejecucion",
         "Resultado",
+        "Tarea",
         "Descripcion"
     ])
     writer.writerows(all_results)
@@ -213,3 +228,4 @@ def main(mytimer):
     blob_client.upload_blob(output.getvalue(), overwrite=True)
 
     print(f"CSV subido correctamente: {container_name}/{blob_name}")
+
