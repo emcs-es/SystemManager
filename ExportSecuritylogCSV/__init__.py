@@ -112,7 +112,6 @@ def main(mytimer):
         if m_instance:
             instance_name = m_instance.group(1).strip()
 
-
         return account_name, str(account_id), execution_date, instance_name
 
     # ==============================
@@ -125,12 +124,32 @@ def main(mytimer):
             return datetime.min
 
     # ==============================
+    # Obtener LastModified de un objeto S3 (NUEVO)
+    # ==============================
+    def get_last_modified(key):
+        try:
+            response = s3.head_object(Bucket=BUCKET_NAME, Key=key)
+            return response["LastModified"].strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return ""
+
+    # ==============================
+    # Extraer cliente desde el prefijo (NUEVO)
+    # Solo aplica a tareas: Gesplan_export-informes → Gesplan
+    # ==============================
+    def cliente_desde_prefijo(subcarpeta_prefix, tipo):
+        if tipo == "tareas":
+            nombre = subcarpeta_prefix.replace(PREFIX_TAREAS, "").strip("/")
+            return nombre.split("_", 1)[0]
+        return ""
+
+    # ==============================
     # Procesar CommandId
     # ==============================
     def process_command(entry):
         subcarpeta_prefix, command_id, tipo = entry
         results = []
-      
+
         tarea = ""
         if tipo == "tareas":
             tarea = subcarpeta_prefix.replace(PREFIX_TAREAS, "").strip("/")
@@ -151,6 +170,16 @@ def main(mytimer):
             stderr = read_s3(stderr_key) if object_exists(stderr_key) else ""
 
             account_name, account_id, execution_date, instance_name = extract_metadata(stdout if stdout.strip() else stderr)
+
+            # Fallback fecha: LastModified del objeto S3 cuando no hay cabecera EXECUTION DATE
+            if not execution_date:
+                key_for_date = stdout_key if stdout.strip() else stderr_key
+                execution_date = get_last_modified(key_for_date)
+
+            # Fallback account_name: cliente extraído del prefijo cuando no hay cabecera ACCOUNT NAME
+            # Solo aplica a tareas (Gesplan_export-informes → Gesplan)
+            if not account_name and tipo == "tareas":
+                account_name = cliente_desde_prefijo(subcarpeta_prefix, tipo)
 
             if stderr.strip():
                 result = "ERROR"
@@ -228,4 +257,3 @@ def main(mytimer):
     blob_client.upload_blob(output.getvalue(), overwrite=True)
 
     print(f"CSV subido correctamente: {container_name}/{blob_name}")
-
