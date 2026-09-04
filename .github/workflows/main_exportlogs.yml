@@ -1,4 +1,4 @@
-name: Deploy Azure Function - exportfindin
+name: Deploy Azure Function - exportlogs
 
 on:
   workflow_dispatch:
